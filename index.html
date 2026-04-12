@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Navigation Engine — Bengaluru</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif}
+body{display:flex;flex-direction:column;background:#0f1117}
+
+/* ── TOP BAR ── */
+#topbar{
+  height:52px;background:rgba(15,17,23,0.97);border-bottom:1px solid #2a2d3a;
+  display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;
+  box-shadow:0 1px 12px rgba(0,0,0,.5);z-index:300;
+}
+.logo{font-size:17px;font-weight:600;color:#60a5fa;display:flex;align-items:center;gap:9px}
+.logo-ring{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#3b82f6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0;box-shadow:0 0 10px #3b82f640}
+.logo-sub{font-size:11px;color:#4b5563;font-weight:400;margin-left:2px}
+#srv-dot{width:8px;height:8px;border-radius:50%;background:#374151;transition:background .4s;flex-shrink:0}
+#srv-dot.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
+#srv-dot.off{background:#ef4444;box-shadow:0 0 6px #ef444460}
+#srv-lbl{font-size:11px;color:#6b7280;font-family:'JetBrains Mono',monospace}
+.t-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+#upd-flash{font-size:11px;color:#60a5fa;background:#1e3a5f;padding:3px 10px;border-radius:20px;opacity:0;transition:opacity .3s}
+#upd-flash.show{opacity:1}
+#poll-t{font-size:11px;color:#4b5563;font-family:'JetBrains Mono',monospace}
+
+/* ── MAIN ── */
+#main{flex:1;position:relative;overflow:hidden}
+#map-canvas{position:absolute;inset:0;width:100%;height:100%;cursor:default}
+
+/* ── LEFT PANEL ── */
+#side{
+  position:absolute;top:12px;left:12px;
+  width:270px;z-index:100;
+  display:flex;flex-direction:column;gap:8px;
+  max-height:calc(100% - 24px);overflow-y:auto;
+}
+#side::-webkit-scrollbar{width:3px}
+#side::-webkit-scrollbar-thumb{background:#2a2d3a;border-radius:2px}
+
+.card{
+  background:rgba(17,20,30,0.92);
+  border:1px solid #2a2d3a;
+  border-radius:12px;padding:12px 14px;
+  box-shadow:0 4px 20px rgba(0,0,0,.4);
+  backdrop-filter:blur(12px);
+  flex-shrink:0;
+}
+.ct{font-size:9px;text-transform:uppercase;letter-spacing:1.6px;color:#4b5563;font-weight:600;margin-bottom:8px}
+
+.loc-row{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;border:1.5px solid #2a2d3a;cursor:pointer;background:#0f1117;margin-bottom:6px;transition:all .18s}
+.loc-row:last-of-type{margin-bottom:0}
+.loc-row:hover{border-color:#3b82f6}
+.loc-row.pick{border-color:#3b82f6;box-shadow:0 0 0 3px #3b82f620}
+.pip{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pip.s{background:#22c55e}
+.pip.e{background:#ef4444}
+.lbl{font-size:12px;color:#6b7280;flex:1}
+.lbl.v{color:#e2e8f0;font-weight:500}
+.vline{width:1.5px;height:10px;background:#2a2d3a;margin:-4px 0 -4px 19px}
+
+.modes{display:flex;gap:5px}
+.mbtn{flex:1;padding:7px 4px;border-radius:7px;border:1.5px solid #2a2d3a;background:#0f1117;font-family:'DM Sans',sans-serif;font-size:11px;color:#6b7280;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.mbtn.on{background:#1e3a5f;border-color:#3b82f6;color:#60a5fa;font-weight:600}
+.mi{font-size:15px}
+
+#fbtn{width:100%;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;margin-top:6px}
+#fbtn:hover:not(:disabled){background:linear-gradient(135deg,#1e3a8a,#1d4ed8);transform:translateY(-1px);box-shadow:0 4px 16px #1e40af60}
+#fbtn:disabled{background:#1e2336;color:#374151;cursor:not-allowed}
+
+#sbtn{width:100%;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#991b1b,#dc2626);color:#fff;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;margin-top:5px;display:none}
+#sbtn:hover{background:linear-gradient(135deg,#7f1d1d,#b91c1c);transform:translateY(-1px)}
+
+.live-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#22c55e;background:#052e16;border:1px solid #166534;border-radius:20px;padding:3px 10px;margin-top:5px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
+
+#countdown-bar{margin-top:7px;display:none}
+#countdown-track{height:3px;background:#1e2336;border-radius:2px;overflow:hidden;margin-top:4px}
+#countdown-fill{height:100%;background:#3b82f6;border-radius:2px;transition:width 1s linear;width:100%}
+#countdown-lbl{font-size:10px;color:#4b5563;display:flex;justify-content:space-between}
+
+.route-legend{margin-top:8px;border-top:1px solid #2a2d3a;padding-top:8px;display:none}
+.rl-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;padding:5px 7px;border-radius:6px;cursor:pointer;transition:background .15s}
+.rl-row:hover{background:#1a1d2e}
+.rl-row.active{background:#1e3a5f;border:1px solid #3b82f630}
+.rl-line{width:26px;height:4px;border-radius:2px;flex-shrink:0}
+.rl-info{flex:1}
+.rl-name{font-size:11px;font-weight:600;color:#e2e8f0}
+.rl-detail{font-size:10px;color:#4b5563;margin-top:1px}
+
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sc{background:#0f1117;border-radius:7px;padding:8px 4px;text-align:center;border:1px solid #2a2d3a}
+.sv{font-size:17px;font-weight:600;color:#60a5fa;font-family:'JetBrains Mono',monospace}
+.sl{font-size:9px;color:#4b5563;text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+
+#steps-wrap{max-height:160px;overflow-y:auto;display:none;margin-top:7px}
+#steps-wrap::-webkit-scrollbar{width:3px}
+#steps-wrap::-webkit-scrollbar-thumb{background:#2a2d3a}
+.step{display:flex;gap:7px;padding:6px 0;border-bottom:1px solid #1e2336;align-items:flex-start}
+.step:last-child{border:none}
+.snum{width:18px;height:18px;border-radius:50%;background:#1e3a5f;border:1px solid #3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;color:#60a5fa;flex-shrink:0}
+.sname{font-size:12px;color:#e2e8f0;font-weight:500}
+.ssub{font-size:10px;color:#4b5563;margin-top:1px}
+.cbadge{font-size:10px;padding:2px 6px;border-radius:4px;margin-top:3px;display:inline-block;font-weight:500}
+
+/* ── RIGHT PANEL ── */
+#ev-wrap{position:absolute;top:12px;right:12px;width:230px;z-index:100;display:flex;flex-direction:column;gap:8px}
+#ev-list{overflow-y:auto;flex:1;padding-top:2px;max-height:240px}
+#ev-list::-webkit-scrollbar{width:3px}
+#ev-list::-webkit-scrollbar-thumb{background:#2a2d3a}
+.ev{padding:7px 9px;border-radius:7px;background:#111318;border-left:3px solid #2a2d3a;margin-bottom:5px;animation:evin .3s ease}
+@keyframes evin{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.ev-t{font-size:10px;color:#374151;font-family:'JetBrains Mono',monospace}
+.ev-m{font-size:11px;color:#9ca3af;margin-top:2px;line-height:1.4}
+.ev.blocked{border-left-color:#7f1d1d;background:#1c0a0a}
+.ev.accident{border-left-color:#dc2626;background:#1c0d0d}
+.ev.heavy{border-left-color:#ea580c;background:#1c1008}
+.ev.clear{border-left-color:#16a34a;background:#071910}
+.ev.moderate{border-left-color:#ca8a04;background:#1c1500}
+.ev.light{border-left-color:#4ade80;background:#071910}
+.leg-g{display:flex;flex-wrap:wrap;gap:5px 8px}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:#6b7280}
+.ll{width:18px;height:3px;border-radius:2px}
+
+/* ── BLOCKCHAIN PANEL ── */
+#chain-card{flex-shrink:0}
+#chain-list{max-height:180px;overflow-y:auto;margin-top:6px}
+#chain-list::-webkit-scrollbar{width:3px}
+#chain-list::-webkit-scrollbar-thumb{background:#2a2d3a}
+.blk{background:#0a0c14;border:1px solid #2a2d3a;border-radius:7px;padding:7px 9px;margin-bottom:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#6b7280;position:relative;overflow:hidden;transition:border-color .3s}
+.blk:first-child{border-color:#3b82f640}
+.blk-idx{color:#3b82f6;font-weight:600;font-size:11px}
+.blk-hash{color:#1e40af;font-size:9px;margin-top:2px;word-break:break-all;opacity:.8}
+.blk-txs{color:#4b5563;font-size:9px;margin-top:3px}
+.blk-time{color:#374151;font-size:9px;margin-top:1px}
+.blk-valid{position:absolute;top:6px;right:8px;font-size:9px;font-weight:700}
+.blk-valid.ok{color:#22c55e}
+.blk-valid.bad{color:#ef4444}
+.chain-status{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.chain-valid-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;flex-shrink:0}
+.chain-valid-dot.bad{background:#ef4444;box-shadow:0 0 6px #ef4444}
+.chain-stat{font-size:10px;color:#6b7280}
+.chain-stat span{color:#60a5fa;font-weight:600}
+.pending-badge{font-size:9px;background:#1e3a5f;color:#60a5fa;border-radius:10px;padding:2px 7px;font-family:'JetBrains Mono',monospace}
+
+/* ── REROUTE ALERT ── */
+#alert{
+  position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+  background:#111318;border:2px solid #dc2626;border-radius:12px;
+  padding:13px 16px;min-width:320px;z-index:400;display:none;
+  box-shadow:0 6px 28px rgba(220,38,38,.3);
+  animation:alrt .35s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes alrt{from{opacity:0;transform:translateX(-50%) scale(.82)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+.ah{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.at{font-size:13px;font-weight:600;color:#ef4444}
+.ab{font-size:12px;color:#9ca3af;line-height:1.5;margin-bottom:7px}
+.af{font-size:11px;color:#4b5563}
+#cdb{height:3px;background:#1e2336;border-radius:2px;margin-top:7px;overflow:hidden}
+#cdf{height:100%;background:#dc2626;border-radius:2px;transition:width .1s linear}
+
+#tip{position:absolute;background:rgba(15,17,23,0.97);border:1px solid #2a2d3a;border-radius:8px;padding:8px 12px;font-size:12px;pointer-events:none;display:none;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:1.65;max-width:180px;color:#e2e8f0}
+#algo{position:absolute;bottom:12px;right:12px;z-index:100;background:rgba(15,17,23,0.9);border:1px solid #2a2d3a;border-radius:7px;padding:4px 11px;font-size:10px;color:#374151;font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2d3a;border-radius:4px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-ring">🧭</div>
+    Navigation Engine
+    <span class="logo-sub">Bengaluru</span>
+  </div>
+  <div id="srv-dot"></div>
+  <span id="srv-lbl">Connecting…</span>
+  <div class="t-right">
+    <span id="upd-flash">⟳ Traffic updated</span>
+    <span id="poll-t">—</span>
+  </div>
+</div>
+
+<div id="main">
+  <canvas id="map-canvas"></canvas>
+
+  <div id="side">
+    <div class="card">
+      <div class="ct">Travel Mode</div>
+      <div class="modes">
+        <button class="mbtn on" id="mb-drive" onclick="setMode('drive')"><span class="mi">🚗</span>Drive</button>
+        <button class="mbtn" id="mb-walk" onclick="setMode('walk')"><span class="mi">🚶</span>Walk</button>
+        <button class="mbtn" id="mb-auto" onclick="setMode('auto')"><span class="mi">🛺</span>Auto</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">Route</div>
+      <div class="loc-row pick" id="rs" onclick="setPick('start')">
+        <div class="pip s"></div><span class="lbl" id="ls">Click a node — set start</span>
+      </div>
+      <div class="vline"></div>
+      <div class="loc-row" id="re" onclick="setPick('end')">
+        <div class="pip e"></div><span class="lbl" id="le">Click a node — destination</span>
+      </div>
+      <button id="fbtn" disabled onclick="findRoute()">Find Fastest Route</button>
+      <button id="sbtn" onclick="stopTracking()">⏹ Stop Live Tracking</button>
+      <div id="live-badge" class="live-badge" style="display:none"><span class="live-dot"></span>Live — recalc every 30s</div>
+      <div id="countdown-bar">
+        <div id="countdown-lbl"><span>Next recalculation</span><span id="countdown-num">30s</span></div>
+        <div id="countdown-track"><div id="countdown-fill"></div></div>
+      </div>
+      <div class="route-legend" id="route-legend">
+        <div class="ct" style="margin-bottom:6px">Active Paths</div>
+        <div class="rl-row active" id="leg-0" onclick="selectPath(0)">
+          <div class="rl-line" style="background:#22c55e"></div>
+          <div class="rl-info">
+            <div class="rl-name">🟢 Cleanest Path</div>
+            <div class="rl-detail" id="leg-0-detail">Fewest obstacles</div>
+          </div>
+        </div>
+        <div class="rl-row" id="leg-1" onclick="selectPath(1)">
+          <div class="rl-line" style="background:#f97316"></div>
+          <div class="rl-info">
+            <div class="rl-name">🟠 Traffic Path</div>
+            <div class="rl-detail" id="leg-1-detail">Via congested roads</div>
+          </div>
+        </div>
+        <div class="rl-row" id="leg-2" onclick="selectPath(2)">
+          <div class="rl-line" style="background:#64748b"></div>
+          <div class="rl-info">
+            <div class="rl-name">⚫ Longest Path</div>
+            <div class="rl-detail" id="leg-2-detail">Alternate route</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="sc" style="display:none">
+      <div class="ct">Route Summary</div>
+      <div class="sgrid">
+        <div class="sc"><div class="sv" id="sd">—</div><div class="sl">km</div></div>
+        <div class="sc"><div class="sv" id="st">—</div><div class="sl">min</div></div>
+        <div class="sc"><div class="sv" id="sh">—</div><div class="sl">stops</div></div>
+      </div>
+      <div id="steps-wrap">
+        <div style="margin-top:8px;font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:#4b5563;margin-bottom:5px">Turn-by-turn</div>
+        <div id="sl"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ev-wrap">
+    <div class="card">
+      <div class="ct">Live Incidents</div>
+      <div id="ev-list"><div style="color:#4b5563;font-size:12px;padding:6px 0">Waiting for server…<br><span style="font-size:11px">Auto-simulates if offline</span></div></div>
+    </div>
+    <div class="card">
+      <div class="ct">Road Conditions</div>
+      <div class="leg-g">
+        <div class="leg"><div class="ll" style="background:#22c55e"></div>Clear</div>
+        <div class="leg"><div class="ll" style="background:#ca8a04"></div>Moderate</div>
+        <div class="leg"><div class="ll" style="background:#ea580c"></div>Heavy</div>
+        <div class="leg"><div class="ll" style="background:#dc2626"></div>Accident</div>
+        <div class="leg"><div class="ll" style="background:#450a0a"></div>Blocked</div>
+      </div>
+    </div>
+    <div class="card" id="chain-card">
+      <div class="ct">⛓ Blockchain Ledger</div>
+      <div class="chain-status">
+        <div class="chain-valid-dot" id="chain-dot"></div>
+        <div class="chain-stat">Blocks: <span id="chain-len">0</span> &nbsp;|&nbsp; Pending: <span id="chain-pending">0</span></div>
+        <div class="pending-badge" id="chain-validity">VALID</div>
+      </div>
+      <div id="chain-list"></div>
+    </div>
+  </div>
+
+  <div id="alert">
+    <div class="ah"><span style="font-size:19px">⚠️</span><span class="at">Traffic Incident on Route</span></div>
+    <div class="ab" id="alb">Route affected by traffic change.</div>
+    <div class="af">Rerouting in <strong id="cdn">3</strong>s…</div>
+    <div id="cdb"><div id="cdf" style="width:100%"></div></div>
+  </div>
+
+  <div id="tip"></div>
+  <div id="algo">Dijkstra + A* · Blockchain · live 30s</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// BANGALORE MAP — nodes placed at real Bangalore neighborhoods/junctions
+// OSM tile center: 12.9716° N, 77.5946° E (Bengaluru city center)
+// Nodes use normalized (x,y) fractions mapped over the visible tile area
+// The tile area covers roughly:
+//   Lat: 12.85 (south) to 13.10 (north)
+//   Lon: 77.45 (west) to 77.75 (east)
+// So  x = (lon - 77.45) / 0.30
+//     y = (13.10 - lat) / 0.25   (inverted: north=top)
+// ═══════════════════════════════════════════════════════════════════
+
+function lonToX(lon){ return (lon - 77.45) / 0.30; }
+function latToY(lat){ return (13.10 - lat) / 0.25; }
+
+// Real Bangalore locations with actual lat/lon
+const NODES = {
+  // North Bangalore
+  YPR: {lat:13.020, lon:77.550, name:'Yeshwanthpur'},
+  HBL: {lat:13.035, lon:77.597, name:'Hebbal'},
+  KNH: {lat:13.048, lon:77.620, name:'Kanakapura Rd N'},
+  MRD: {lat:13.043, lon:77.660, name:'Manyata Tech Park'},
+  BGL: {lat:13.012, lon:77.706, name:'Bagalur'},
+  WHF: {lat:13.075, lon:77.640, name:'Yelahanka'},
+  DEV: {lat:13.060, lon:77.578, name:'Devanahalli Rd'},
+
+  // North-Central
+  MLY: {lat:12.995, lon:77.528, name:'Malleswaram'},
+  SAD: {lat:12.990, lon:77.575, name:'Sadashivanagar'},
+  MAT: {lat:12.988, lon:77.612, name:'Mattikere'},
+  WHL: {lat:12.985, lon:77.648, name:'Whitefield Jn'},
+  KGD: {lat:12.975, lon:77.700, name:'Krishnarajapuram'},
+
+  // Central Bangalore
+  MGA: {lat:12.975, lon:77.530, name:'Majestic / KSR'},
+  CVR: {lat:12.972, lon:77.562, name:'Cubbon Park'},
+  MND: {lat:12.968, lon:77.590, name:'Indiranagar'},
+  OFL: {lat:12.965, lon:77.620, name:'Old Madras Rd'},
+  WFD: {lat:12.970, lon:77.660, name:'Whitefield'},
+  THN: {lat:12.960, lon:77.695, name:'Thubarahalli'},
+
+  // Central core
+  BMS: {lat:12.955, lon:77.537, name:'Basavanagudi'},
+  NTR: {lat:12.952, lon:77.565, name:'Nandini Layout'},
+  KOR: {lat:12.950, lon:77.594, name:'Koramangala'},
+  HSR: {lat:12.948, lon:77.625, name:'HSR Layout'},
+  MRT: {lat:12.945, lon:77.660, name:'Marathahalli'},
+  VRT: {lat:12.955, lon:77.693, name:'Varthur'},
+
+  // South-Central
+  JPR: {lat:12.925, lon:77.535, name:'Jayanagar'},
+  BTM: {lat:12.920, lon:77.565, name:'BTM Layout'},
+  HSN: {lat:12.918, lon:77.595, name:'Harlur Rd'},
+  BEL: {lat:12.916, lon:77.627, name:'Bellandur'},
+  KPN: {lat:12.914, lon:77.658, name:'Kadubeesanahalli'},
+  SARN: {lat:12.920, lon:77.690, name:'Sarjapur Rd'},
+
+  // South
+  BNP: {lat:12.895, lon:77.540, name:'Bannerghatta Rd'},
+  KNK: {lat:12.892, lon:77.568, name:'Kanakapura Rd'},
+  EGL: {lat:12.890, lon:77.597, name:'Electronic City Jn'},
+  HST: {lat:12.888, lon:77.630, name:'Hosa Road'},
+  AMB: {lat:12.885, lon:77.660, name:'Ambedkar Nagar'},
+
+  // Far South / Electronic City
+  ECT: {lat:12.858, lon:77.572, name:'Electronic City'},
+  ANG: {lat:12.855, lon:77.600, name:'Anekal Rd'},
+  CHK: {lat:12.852, lon:77.635, name:'Chandapura'},
+
+  // West
+  RJJ: {lat:12.978, lon:77.502, name:'Rajajinagar'},
+  VJN: {lat:12.955, lon:77.498, name:'Vijayanagar'},
+  KNG: {lat:12.930, lon:77.507, name:'Kengeri'},
+  KNP: {lat:12.900, lon:77.515, name:'Kanakapura Rd S'},
+
+  // East / Whitefield extended
+  ITPL:{lat:12.987, lon:77.730, name:'ITPL / EPIP'},
+  HOP: {lat:12.960, lon:77.730, name:'Hoodi'},
+  MAH: {lat:12.930, lon:77.725, name:'Mahadevapura'},
+};
+
+// Compute normalized x,y for each node
+Object.values(NODES).forEach(n => {
+  n.x = lonToX(n.lon);
+  n.y = latToY(n.lat);
+  // clamp
+  n.x = Math.max(0.01, Math.min(0.99, n.x));
+  n.y = Math.max(0.01, Math.min(0.99, n.y));
+});
+
+// Edges — real road connections in Bangalore
+const EDGE_DEFS = [
+  // Outer Ring Road (ORR) — runs east-west through middle
+  ['MGA','CVR'],['CVR','MND'],['MND','OFL'],['OFL','WFD'],['WFD','THN'],['THN','VRT'],
+  // Connecting ORR to Whitefield extended
+  ['VRT','HOP'],['HOP','ITPL'],
+  // NH 44 / Bellary Road (north)
+  ['MGA','MLY'],['MLY','YPR'],['YPR','DEV'],['DEV','WHF'],
+  ['MLY','SAD'],['SAD','MAT'],['MAT','HBL'],['HBL','MRD'],['MRD','BGL'],
+  // Mysore Road / west
+  ['MGA','RJJ'],['RJJ','VJN'],['VJN','KNG'],['KNG','KNP'],
+  // Bannerghatta Road (south)
+  ['BMS','JPR'],['JPR','BNP'],['BNP','KNP'],
+  // Kanakapura Road
+  ['BTM','KNK'],['KNK','ECT'],['ECT','ANG'],
+  // Electronic City corridor
+  ['EGL','ECT'],['ECT','CHK'],['ANG','CHK'],
+  // Hosur Road / Electronic City
+  ['KOR','HSN'],['HSN','EGL'],['EGL','HST'],['HST','AMB'],
+  // Sarjapur Road
+  ['BEL','SARN'],['SARN','MAH'],['MAH','VRT'],
+  // ITPL / Whitefield Road
+  ['WFD','MRT'],['MRT','KPN'],['KPN','SARN'],
+  ['WFD','ITPL'],['ITPL','HOP'],['HOP','MAH'],
+  // KR Puram / Old Madras Road
+  ['OFL','KGD'],['KGD','ITPL'],
+  // Intermediate north connections
+  ['HBL','WHF'],['WHF','KNH'],['KNH','MRD'],
+  // Central connectors
+  ['CVR','NTR'],['NTR','BMS'],['BMS','VJN'],
+  ['MND','KOR'],['KOR','BTM'],['BTM','JPR'],
+  ['OFL','HSR'],['HSR','BEL'],['BEL','KPN'],
+  ['HSR','MRT'],
+  ['NTR','BTM'],['KOR','HSR'],
+  ['WHL','WFD'],['MAT','WHL'],
+  ['MLY','RJJ'],
+  ['SAD','CVR'],['MAT','MND'],['WHL','OFL'],
+  ['YPR','MLY'],
+  // East-west connectors
+  ['KGD','THN'],['THN','HOP'],
+  ['MRD','KGD'],
+  // South cross connections
+  ['JPR','KNK'],['BNP','ECT'],
+  ['HST','CHK'],
+  ['AMB','CHK'],
+  // Extra density in central area
+  ['CVR','BMS'],['NTR','JPR'],
+  ['MND','HSR'],['OFL','MRT'],
+  ['KOR','BEL'],
+  ['MAT','SAD'],
+];
+
+// ─── CONSTANTS ─────────────────────────────────────────────────
+const CCOL = {
+  clear:'#22c55e', light:'#22c55e', moderate:'#ca8a04',
+  heavy:'#ea580c', construction:'#ea580c', accident:'#dc2626', blocked:'#450a0a'
+};
+const CWID = {clear:2.5,light:2.5,moderate:3.5,heavy:4,construction:3.5,accident:4,blocked:3};
+const SPEED = {drive:1, walk:5, auto:1.8};
+const API = 'http://localhost:3001';
+
+// ─── STATE ──────────────────────────────────────────────────────
+let traffic={}, startN=null, endN=null, route=[], pickMode='start';
+let tMode='drive', animP=0, animRAF=null, rerouteT=null, lastEv=0, hovN=null;
+let liveTracking=false, liveInterval=null, countdownT=null, countdownSec=30;
+
+// Multi-path state: 3 paths shown simultaneously
+let paths=[]; // [{path, dist, label, outlineColor, tag}]
+let selectedPath=0; // which path is "primary" (animated car on it)
+
+// Path visual configs
+const PATH_STYLES=[
+  {tag:'clean',   outlineColor:'#22c55e', label:'Cleanest Path',  dash:[]},
+  {tag:'traffic', outlineColor:'#f97316', label:'Traffic Path',   dash:[8,5]},
+  {tag:'long',    outlineColor:'#64748b', label:'Longest Path',   dash:[4,4]},
+];
+const canvas=document.getElementById('map-canvas');
+const ctx=canvas.getContext('2d');
+const mainEl=document.getElementById('main');
+
+// ─── MAP CONFIG — centered on Bengaluru ────────────────────────
+const MAP_CENTER_LAT = 12.9716;
+const MAP_CENTER_LON = 77.5946;
+const LAT_MIN = 12.845, LAT_MAX = 13.085;
+const LON_MIN = 77.45,  LON_MAX = 77.75;
+const SIDEBAR_W = 294; // left panel width + gap — graph starts here
+const RIGHT_W   = 242; // right panel width + gap
+
+// Convert lat/lon to canvas pixel — graph rendered in the visible strip
+// between left sidebar and right panel
+function geoToCanvas(lat, lon){
+  const W = canvas.width, H = canvas.height;
+  const usableW = W - SIDEBAR_W - RIGHT_W;
+  const x = SIDEBAR_W + (lon - LON_MIN) / (LON_MAX - LON_MIN) * usableW;
+  const y = (1 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN)) * H;
+  return { x, y };
+}
+
+// Dark mode canvas map background
+function drawTiles(){
+  const W = canvas.width, H = canvas.height;
+
+  // Deep dark background
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0,   '#0d0f18');
+  bg.addColorStop(0.5, '#0f1117');
+  bg.addColorStop(1,   '#111320');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.8;
+  const gsx = (W - SIDEBAR_W - RIGHT_W) / 16, gsy = H / 12;
+  for(let x = SIDEBAR_W; x <= W - RIGHT_W; x += gsx){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for(let y = 0; y <= H; y += gsy){
+    ctx.beginPath(); ctx.moveTo(SIDEBAR_W,y); ctx.lineTo(W-RIGHT_W,y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Water bodies — dark teal
+  ctx.save();
+  ctx.fillStyle = 'rgba(14,40,60,0.6)';
+  const ul = geoToCanvas(12.980, 77.620);
+  ctx.beginPath(); ctx.ellipse(ul.x, ul.y, 26, 13, -0.3, 0, Math.PI*2); ctx.fill();
+  const bl = geoToCanvas(12.917, 77.641);
+  ctx.beginPath(); ctx.ellipse(bl.x, bl.y, 36, 17, 0.4, 0, Math.PI*2); ctx.fill();
+  const hl = geoToCanvas(13.038, 77.594);
+  ctx.beginPath(); ctx.ellipse(hl.x, hl.y, 20, 10, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Arterial road hints — dim
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 8; ctx.lineCap = 'round';
+  ctx.beginPath();
+  [[12.978,77.502],[12.975,77.562],[12.968,77.594],[12.965,77.660],[12.960,77.730]].forEach((p,i)=>{
+    const c=geoToCanvas(p[0],p[1]); i===0?ctx.moveTo(c.x,c.y):ctx.lineTo(c.x,c.y);
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  // Compass — visible area only
+  ctx.save();
+  ctx.font = 'bold 10px DM Sans, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', SIDEBAR_W + 28, 26);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(SIDEBAR_W+28,30); ctx.lineTo(SIDEBAR_W+28,44); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(SIDEBAR_W+28,20); ctx.lineTo(SIDEBAR_W+23,34); ctx.lineTo(SIDEBAR_W+28,29); ctx.lineTo(SIDEBAR_W+33,34); ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
+  ctx.restore();
+
+  // Bengaluru watermark
+  ctx.save();
+  ctx.font = '600 12px DM Sans, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.textAlign = 'center';
+  const cc = geoToCanvas(12.9716, 77.5946);
+  ctx.fillText('Bengaluru', cc.x, cc.y + 55);
+  ctx.restore();
+}
+
+// ─── DIJKSTRA ───────────────────────────────────────────────────
+function buildGraph(penalizeEdges=null, edgeMultiplier=1){
+  const g={};
+  Object.keys(NODES).forEach(n=>g[n]={});
+  EDGE_DEFS.forEach(([a,b])=>{
+    if(!NODES[a]||!NODES[b]) return;
+    const k=`${a}-${b}`, kr=`${b}-${a}`;
+    const td=traffic[k]||traffic[kr];
+    const base=td?.baseWeight||defaultWeight(a,b);
+    let w=td?td.effectiveWeight:base;
+    // Apply penalty to force alternate routes
+    if(penalizeEdges){
+      const ek=`${a}-${b}`, ekr=`${b}-${a}`;
+      if(penalizeEdges.has(ek)||penalizeEdges.has(ekr)) w=w*edgeMultiplier;
+    }
+    g[a][b]=w; g[b][a]=w;
+  });
+  return g;
+}
+
+function defaultWeight(a,b){
+  const na=NODES[a],nb=NODES[b];
+  if(!na||!nb) return 5;
+  const dlat=(na.lat-nb.lat)*111;
+  const dlon=(na.lon-nb.lon)*111*Math.cos(na.lat*Math.PI/180);
+  return Math.max(1, Math.round(Math.sqrt(dlat*dlat+dlon*dlon)));
+}
+
+function dijkstraWithGraph(g, src, dst){
+  const dist={},prev={},vis=new Set();
+  Object.keys(g).forEach(n=>dist[n]=Infinity);
+  dist[src]=0;
+  const pq=[[0,src]];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const[d,u]=pq.shift();
+    if(vis.has(u))continue; vis.add(u);
+    if(u===dst)break;
+    for(const[v,w] of Object.entries(g[u]||{})){
+      const nd=d+w;
+      if(nd<dist[v]){dist[v]=nd;prev[v]=u;pq.push([nd,v]);}
+    }
+  }
+  const p=[];let cur=dst;
+  while(cur){p.unshift(cur);cur=prev[cur];}
+  return p[0]===src?{path:p,dist:dist[dst]}:{path:[],dist:Infinity};
+}
+
+function dijkstra(src,dst){
+  return dijkstraWithGraph(buildGraph(),src,dst);
+}
+
+// Compute score for a path: sum of condition severity on each edge
+function pathConditionScore(p){
+  const severity={clear:0,light:1,moderate:2,heavy:3,construction:4,accident:5,blocked:10};
+  let score=0;
+  for(let i=0;i<p.length-1;i++){
+    const a=p[i],b=p[i+1];
+    const k=`${a}-${b}`,kr=`${b}-${a}`;
+    const cond=(traffic[k]||traffic[kr])?.condition||'clear';
+    score+=severity[cond]||0;
+  }
+  return score;
+}
+
+// Find 3 distinct paths: cleanest, traffic-heavy, longest alternate
+function findThreePaths(src, dst){
+  // Path 1: Standard Dijkstra (fastest/cleanest based on effective weights)
+  const r1=dijkstra(src,dst);
+  if(!r1.path.length) return [];
+
+  // Build edge set of path 1
+  const edgeSet1=new Set();
+  for(let i=0;i<r1.path.length-1;i++){
+    edgeSet1.add(`${r1.path[i]}-${r1.path[i+1]}`);
+    edgeSet1.add(`${r1.path[i+1]}-${r1.path[i]}`);
+  }
+
+  // Path 2: Force traffic by using base weights only (ignore traffic penalties = finds physically alternate road)
+  // Then penalize path1 edges heavily to diverge
+  const g2=buildGraph(edgeSet1, 8);
+  const r2=dijkstraWithGraph(g2,src,dst);
+
+  // Build edge set of path 1+2
+  const edgeSet12=new Set([...edgeSet1]);
+  if(r2.path.length){
+    for(let i=0;i<r2.path.length-1;i++){
+      edgeSet12.add(`${r2.path[i]}-${r2.path[i+1]}`);
+      edgeSet12.add(`${r2.path[i+1]}-${r2.path[i]}`);
+    }
+  }
+
+  // Path 3: Penalize edges from both path1 and path2 to force a third diverging path
+  const g3=buildGraph(edgeSet12, 15);
+  const r3=dijkstraWithGraph(g3,src,dst);
+
+  const results=[];
+
+  // Sort by condition score to assign labels correctly
+  const candidates=[
+    {path:r1.path,dist:r1.dist},
+    r2.path.length?{path:r2.path,dist:r2.dist}:null,
+    r3.path.length?{path:r3.path,dist:r3.dist}:null,
+  ].filter(Boolean);
+
+  if(!candidates.length) return [];
+
+  // Score each candidate by traffic severity
+  candidates.forEach(c=>{ c.score=pathConditionScore(c.path); c.baseDist=c.path.length; });
+
+  // Cleanest = lowest condition score
+  candidates.sort((a,b)=>a.score-b.score);
+  const clean=candidates[0];
+
+  // Longest = most hops (or highest base km)
+  candidates.sort((a,b)=>b.baseDist-a.baseDist);
+  const longest=candidates[0];
+
+  // Traffic = highest condition score among remaining
+  candidates.sort((a,b)=>b.score-a.score);
+  const trafficPath=candidates.find(c=>c!==clean)||candidates[0];
+
+  return [
+    {...clean,   styleIdx:0},
+    {...trafficPath, styleIdx:1},
+    {...longest, styleIdx:2},
+  ];
+}
+
+// ─── BACKEND / LOCAL SIM ────────────────────────────────────────
+async function poll(){
+  try{
+    const[tr,er,bc]=await Promise.all([
+      fetch(`${API}/api/traffic`),
+      fetch(`${API}/api/events`),
+      fetch(`${API}/api/blockchain`)
+    ]);
+    if(!tr.ok)throw 0;
+    const td=await tr.json(), ed=await er.json(), bd=await bc.json();
+    setStatus(true);
+    const nd={};
+    td.edges.forEach(e=>{nd[`${e.edge[0]}-${e.edge[1]}`]=e;});
+    // Detect changes and log locally too
+    let changed=false;
+    Object.entries(nd).forEach(([k,e])=>{
+      if(traffic[k]?.condition && traffic[k].condition!==e.condition) changed=true;
+    });
+    if(route.length>1) checkAffected(nd);
+    traffic=nd;
+    renderEvents(ed.events||[]);
+    // Render server blockchain into UI
+    renderServerChain(bd);
+    document.getElementById('poll-t').textContent=new Date().toLocaleTimeString();
+    flashEl('upd-flash');
+    if(changed && liveTracking && startN && endN) findRoute(true);
+    else drawAll();
+  }catch{
+    setStatus(false);
+    simulateLocal();
+    drawAll();
+  }
+}
+
+function renderServerChain(bd){
+  if(!bd||!bd.chain) return;
+  const dot=document.getElementById('chain-dot');
+  const val=document.getElementById('chain-validity');
+  if(!dot)return;
+  dot.className='chain-valid-dot'+(bd.isValid?'':' bad');
+  val.textContent=bd.isValid?'VALID':'TAMPERED';
+  val.style.color=bd.isValid?'#22c55e':'#ef4444';
+  document.getElementById('chain-len').textContent=bd.totalBlocks;
+  document.getElementById('chain-pending').textContent=bd.pendingTransactions;
+  const list=document.getElementById('chain-list');
+  list.innerHTML='';
+  bd.chain.forEach(blk=>{
+    const d=document.createElement('div');
+    d.className='blk';
+    const txSummary=blk.transactions.slice(0,2).map(tx=>
+      typeof tx==='string'?tx:`${tx.road||tx.edge}: ${tx.from}→${tx.to}`
+    ).join('; ')+(blk.transactions.length>2?` +${blk.transactions.length-2} more`:'');
+    d.innerHTML=`
+      <div class="blk-idx">#${blk.index} <span style="color:#374151;font-weight:400;font-size:9px">${new Date(blk.timestamp).toLocaleTimeString()}</span></div>
+      <div class="blk-hash">${blk.hash.slice(0,30)}…</div>
+      <div class="blk-txs">${txSummary}</div>
+      <div class="blk-valid ok">✓</div>`;
+    list.appendChild(d);
+  });
+}
+
+const SIM_CONDS=['clear','clear','clear','clear','light','light','moderate','heavy','construction','accident','blocked'];
+const SIM_MULTS={clear:1,light:1.4,moderate:2,heavy:3.2,construction:4,accident:6,blocked:99999};
+let simEvents=[];
+
+function simulateLocal(){
+  document.getElementById('poll-t').textContent='sim '+new Date().toLocaleTimeString();
+  const keys=EDGE_DEFS.filter(([a,b])=>NODES[a]&&NODES[b]).map(([a,b])=>`${a}-${b}`);
+  let changed=false;
+  for(let i=0;i<Math.floor(Math.random()*3)+1;i++){
+    const k=keys[Math.floor(Math.random()*keys.length)];
+    const parts=k.split('-');
+    const a=parts[0],b=parts.slice(1).join('-');
+    if(!NODES[a]||!NODES[b]) continue;
+    const prev=traffic[k]?.condition||'clear';
+    const cond=SIM_CONDS[Math.floor(Math.random()*SIM_CONDS.length)];
+    const base=traffic[k]?.baseWeight||defaultWeight(a,b);
+    traffic[k]={edge:[a,b],condition:cond,baseWeight:base,effectiveWeight:Math.round(base*(SIM_MULTS[cond]||1))};
+    if(prev!==cond){
+      changed=true;
+      const condLabels={clear:'Road cleared',light:'Light traffic',moderate:'Moderate congestion',heavy:'Heavy traffic jam',construction:'Construction work',accident:'Accident reported',blocked:'Road BLOCKED'};
+      const msg=`${condLabels[cond]||cond}: ${NODES[a].name} → ${NODES[b].name}`;
+      simEvents.unshift({time:new Date().toLocaleTimeString(),message:msg,to:cond});
+      if(simEvents.length>15)simEvents.pop();
+      // Log to blockchain
+      blockchain.addTransaction(k, prev, cond, `${NODES[a].name}→${NODES[b].name}`);
+    }
+  }
+  if(route.length>1) checkAffected(traffic);
+  // If tracking and traffic changed, recalculate routes silently
+  if(changed && liveTracking && startN && endN) findRoute(true);
+  const list=document.getElementById('ev-list');
+  list.innerHTML='';
+  simEvents.slice(0,10).forEach(e=>{
+    const d=document.createElement('div');
+    d.className=`ev ${e.to}`;
+    d.innerHTML=`<div class="ev-t">${e.time}</div><div class="ev-m">${e.message}</div>`;
+    list.appendChild(d);
+  });
+}
+
+function checkAffected(nd){
+  for(let i=0;i<route.length-1;i++){
+    const a=route[i],b=route[i+1];
+    const k=`${a}-${b}`,kr=`${b}-${a}`;
+    const nt=nd[k]||nd[kr], ot=traffic[k]||traffic[kr];
+    if(!nt||!ot)continue;
+    const bad=(nt.effectiveWeight>=(ot.effectiveWeight||3)*1.6)
+      ||(nt.condition==='blocked'&&ot.condition!=='blocked')
+      ||(nt.condition==='accident'&&ot.condition!=='accident');
+    if(bad&&!rerouteT){triggerAlert(a,b,nt.condition);break;}
+  }
+}
+
+function triggerAlert(a,b,cond){
+  const el=document.getElementById('alert');
+  document.getElementById('alb').textContent=
+    `${NODES[a]?.name} → ${NODES[b]?.name}: ${cond}. Finding faster route…`;
+  el.style.display='block';
+  let cd=3;
+  document.getElementById('cdn').textContent=cd;
+  document.getElementById('cdf').style.width='100%';
+  rerouteT=setInterval(()=>{
+    cd--;
+    document.getElementById('cdn').textContent=cd;
+    document.getElementById('cdf').style.width=(cd/3*100)+'%';
+    if(cd<=0){clearInterval(rerouteT);rerouteT=null;el.style.display='none';findRoute(true);}
+  },1000);
+}
+
+// ─── BLOCKCHAIN ─────────────────────────────────────────────────
+const blockchain = (function(){
+  function sha256hex(str){
+    // Simple non-crypto hash for display (djb2 + base36)
+    let h=5381;
+    for(let i=0;i<str.length;i++) h=((h<<5)+h)+str.charCodeAt(i)|0;
+    // Expand to look like a hash using multiple rounds
+    let h2=h^0xdeadbeef, h3=h^0xcafebabe;
+    for(let i=0;i<str.length;i++){
+      h2=Math.imul(h2^str.charCodeAt(i),0x9e3779b9)|0;
+      h3=Math.imul(h3^str.charCodeAt(i),0x517cc1b7)|0;
+    }
+    const hex=(n)=>((n>>>0).toString(16).padStart(8,'0'));
+    return hex(h)+hex(h2)+hex(h3)+hex(h^h2)+hex(h2^h3)+hex(h^h3)+hex(h+h2)+hex(h2+h3);
+  }
+
+  class Block {
+    constructor(index, transactions, prevHash){
+      this.index=index;
+      this.timestamp=Date.now();
+      this.transactions=transactions;
+      this.prevHash=prevHash;
+      this.hash=this.computeHash();
+    }
+    computeHash(){
+      return sha256hex(JSON.stringify({
+        i:this.index, t:this.timestamp,
+        tx:this.transactions, p:this.prevHash
+      }));
+    }
+  }
+
+  const chain=[new Block(0,['Genesis — Navigation Engine traffic ledger'],'0000000000000000')];
+  const pending=[];
+  const MAX_BLOCKS=10; // keep UI tidy
+
+  function addTransaction(edge, fromCond, toCond, nodeName){
+    pending.push({edge, from:fromCond, to:toCond, node:nodeName, t:new Date().toLocaleTimeString()});
+    if(pending.length>=4) sealBlock();
+  }
+
+  function sealBlock(){
+    if(!pending.length) return;
+    const prev=chain[chain.length-1];
+    const blk=new Block(chain.length,[...pending],prev.hash);
+    chain.push(blk);
+    if(chain.length>MAX_BLOCKS) chain.shift(); // rolling window
+    pending.length=0;
+    renderChain();
+  }
+
+  function isValid(){
+    for(let i=1;i<chain.length;i++){
+      if(chain[i].hash!==chain[i].computeHash()) return false;
+      if(chain[i].prevHash!==chain[i-1].hash) return false;
+    }
+    return true;
+  }
+
+  function renderChain(){
+    const valid=isValid();
+    const dot=document.getElementById('chain-dot');
+    const val=document.getElementById('chain-validity');
+    const lenEl=document.getElementById('chain-len');
+    const pendEl=document.getElementById('chain-pending');
+    if(!dot) return;
+    dot.className='chain-valid-dot'+(valid?'':' bad');
+    val.textContent=valid?'VALID':'TAMPERED';
+    val.style.color=valid?'#22c55e':'#ef4444';
+    lenEl.textContent=chain.length;
+    pendEl.textContent=pending.length;
+
+    const list=document.getElementById('chain-list');
+    list.innerHTML='';
+    // Show newest first
+    [...chain].reverse().forEach(blk=>{
+      const d=document.createElement('div');
+      d.className='blk';
+      const txSummary=blk.transactions.slice(0,2).map(tx=>
+        typeof tx==='string'?tx:`${tx.node||tx.edge}: ${tx.from}→${tx.to}`
+      ).join('; ')+(blk.transactions.length>2?` +${blk.transactions.length-2} more`:'');
+      d.innerHTML=`
+        <div class="blk-idx">#${blk.index} <span style="color:#374151;font-weight:400;font-size:9px">${new Date(blk.timestamp).toLocaleTimeString()}</span></div>
+        <div class="blk-hash">${blk.hash.slice(0,32)}…</div>
+        <div class="blk-txs">${txSummary}</div>
+        <div class="blk-valid ok">✓</div>`;
+      list.appendChild(d);
+    });
+  }
+
+  // Seal any pending tx every 30s as a time-based block
+  setInterval(()=>{ if(pending.length>0) sealBlock(); }, 30000);
+
+  renderChain(); // init display
+
+  return { addTransaction, sealBlock, renderChain, get chainLength(){ return chain.length; } };
+})();
+function setStatus(ok){
+  document.getElementById('srv-dot').className=ok?'on':'off';
+  document.getElementById('srv-lbl').textContent=ok?'localhost:3001':'Offline — simulating';
+}
+function flashEl(id){const e=document.getElementById(id);e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1400);}
+
+// Server uses abstract A-Z node IDs; we show the condition + a generic road label instead
+function cleanEventMessage(msg){
+  // Replace patterns like "A → B", "G→H", "R→AA" with "Road segment"
+  return msg.replace(/\b[A-Z]{1,2}\s*→\s*[A-Z]{1,2}\b/g,'road segment')
+            .replace(/\b[A-Z]{1,2}\s*->\s*[A-Z]{1,2}\b/g,'road segment');
+}
+
+function renderEvents(evs){
+  if(!evs.length||evs.length===lastEv)return;
+  lastEv=evs.length;
+  const list=document.getElementById('ev-list');
+  list.innerHTML='';
+  evs.slice(0,10).forEach(e=>{
+    const d=document.createElement('div');
+    d.className=`ev ${e.to}`;
+    const cleanMsg=cleanEventMessage(e.message||e.msg||'');
+    d.innerHTML=`<div class="ev-t">${e.time}</div><div class="ev-m">${cleanMsg}</div>`;
+    list.appendChild(d);
+  });
+}
+
+// ─── ROUTE ──────────────────────────────────────────────────────
+function selectPath(idx){
+  selectedPath=idx;
+  [0,1,2].forEach(i=>{
+    document.getElementById(`leg-${i}`)?.classList.toggle('active',i===idx);
+  });
+  // Update primary route for step-by-step panel
+  if(paths[idx]) updateStepsPanel(paths[idx]);
+  animP=0; animRoute();
+}
+
+function updateStepsPanel(pathObj){
+  if(!pathObj) return;
+  const p=pathObj.path;
+  const dist=pathObj.dist;
+  const t=Math.round(dist*SPEED[tMode]);
+  document.getElementById('sd').textContent=dist;
+  document.getElementById('st').textContent=t>60?`${Math.floor(t/60)}h${t%60}`:t;
+  document.getElementById('sh').textContent=p.length-1;
+  document.getElementById('sc').style.display='block';
+  const sw=document.getElementById('steps-wrap');sw.style.display='block';
+  const sl=document.getElementById('sl');sl.innerHTML='';
+  p.forEach((n,i)=>{
+    if(i===p.length-1)return;
+    const nx=p[i+1];
+    const k=`${n}-${nx}`,kr=`${nx}-${n}`;
+    const td=traffic[k]||traffic[kr];
+    const cond=td?.condition||'clear';
+    const col=CCOL[cond];
+    const row=document.createElement('div');
+    row.className='step';
+    row.innerHTML=`<div class="snum">${i+1}</div><div><div class="sname">${NODES[n].name}</div><div class="ssub">→ ${NODES[nx].name} · ${td?.baseWeight||defaultWeight(n,nx)}km</div><span class="cbadge" style="background:${col}18;color:${col};border:1px solid ${col}44">${cond}</span></div>`;
+    sl.appendChild(row);
+  });
+}
+
+function startCountdown(){
+  if(countdownT) clearInterval(countdownT);
+  countdownSec=30;
+  document.getElementById('countdown-bar').style.display='block';
+  document.getElementById('countdown-fill').style.width='100%';
+  document.getElementById('countdown-num').textContent='30s';
+
+  countdownT=setInterval(()=>{
+    countdownSec--;
+    const pct=Math.max(0,(countdownSec/30)*100);
+    document.getElementById('countdown-fill').style.width=pct+'%';
+    document.getElementById('countdown-num').textContent=countdownSec+'s';
+    if(countdownSec<=0){
+      if(liveTracking) findRoute(true);
+      countdownSec=30; // reset
+    }
+  },1000);
+}
+
+function findRoute(silent=false){
+  if(!startN||!endN||startN===endN)return;
+
+  const threePaths=findThreePaths(startN,endN);
+  if(!threePaths.length){alert('No path found between these nodes');return;}
+
+  paths=threePaths;
+  route=paths[selectedPath]?.path||paths[0].path; // backward compat for checkAffected
+
+  // Update legend details
+  paths.forEach((p,i)=>{
+    const style=PATH_STYLES[p.styleIdx];
+    const baseDist=p.path.reduce((acc,n,j)=>{
+      if(j===p.path.length-1)return acc;
+      const nx=p.path[j+1];
+      const k=`${n}-${nx}`,kr=`${nx}-${n}`;
+      return acc+(traffic[k]||traffic[kr])?.baseWeight||defaultWeight(n,nx);
+    },0);
+    const t=Math.round(p.dist*SPEED[tMode]);
+    const tStr=t>60?`${Math.floor(t/60)}h${t%60}m`:t+'min';
+    document.getElementById(`leg-${i}-detail`).textContent=
+      `${p.path.length-1} stops · ~${tStr}`;
+    // Update line color in legend
+    document.querySelector(`#leg-${i} .rl-line`).style.background=style.outlineColor;
+    document.querySelector(`#leg-${i} .rl-name`).textContent=
+      ['🟢 Cleanest Path','🟠 Traffic Path','⚫ Longest Path'][i];
+  });
+
+  document.getElementById('route-legend').style.display='block';
+  updateStepsPanel(paths[selectedPath]||paths[0]);
+
+  // Start live tracking
+  if(!liveTracking){
+    liveTracking=true;
+    document.getElementById('sbtn').style.display='block';
+    document.getElementById('live-badge').style.display='flex';
+    document.getElementById('fbtn').textContent='Recalculate Now';
+    startCountdown();
+  } else {
+    // Reset countdown after manual/auto recalc
+    startCountdown();
+  }
+
+  if(!silent){animP=0;animRoute();}else drawAll();
+}
+
+function stopTracking(){
+  liveTracking=false;
+  if(liveInterval){clearInterval(liveInterval);liveInterval=null;}
+  if(countdownT){clearInterval(countdownT);countdownT=null;}
+  document.getElementById('sbtn').style.display='none';
+  document.getElementById('live-badge').style.display='none';
+  document.getElementById('countdown-bar').style.display='none';
+  document.getElementById('fbtn').textContent='Find Fastest Route';
+  drawAll();
+}
+
+// ─── DRAW ────────────────────────────────────────────────────────
+function resize(){
+  canvas.width=mainEl.offsetWidth;
+  canvas.height=mainEl.offsetHeight;
+  drawAll();
+}
+
+// Convert node id to canvas pixel position
+function nxy(id){
+  return geoToCanvas(NODES[id].lat, NODES[id].lon);
+}
+
+function ecol(a,b){
+  const k=`${a}-${b}`,kr=`${b}-${a}`;
+  return CCOL[(traffic[k]||traffic[kr])?.condition||'clear'];
+}
+function ewid(a,b){
+  const k=`${a}-${b}`,kr=`${b}-${a}`;
+  return CWID[(traffic[k]||traffic[kr])?.condition||'clear']||2.5;
+}
+
+function drawPath(pathObj, styleIdx, prog, isPrimary){
+  const p=pathObj.path;
+  const style=PATH_STYLES[styleIdx];
+  const total=p.length-1;
+  for(let i=0;i<total;i++){
+    const a=p[i],b=p[i+1];
+    if(!NODES[a]||!NODES[b])continue;
+    const pa=nxy(a),pb=nxy(b);
+    // Animate only the primary path, draw others fully
+    let ex=pb.x, ey=pb.y;
+    if(isPrimary){
+      const ss=i/total,se=(i+1)/total;
+      if(prog<ss)continue;
+      const t=Math.min(1,(prog-ss)/(se-ss));
+      ex=pa.x+(pb.x-pa.x)*t; ey=pa.y+(pb.y-pa.y)*t;
+    }
+    const cond=(()=>{const k=`${a}-${b}`,kr=`${b}-${a}`;return (traffic[k]||traffic[kr])?.condition||'clear';})();
+    const trafficCol=CCOL[cond];
+
+    // Dark outer casing (suits dark background)
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(ex,ey);
+    ctx.strokeStyle='rgba(10,12,20,0.85)';
+    ctx.lineWidth=isPrimary?15:12;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Route outline (color identifies the path type)
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(ex,ey);
+    ctx.strokeStyle=style.outlineColor+(isPrimary?'ff':'99');
+    ctx.lineWidth=isPrimary?9:6;
+    ctx.setLineDash(style.dash);
+    ctx.stroke();
+
+    // Traffic condition inner fill
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(ex,ey);
+    ctx.strokeStyle=trafficCol+(isPrimary?'ee':'88');
+    ctx.lineWidth=isPrimary?5:3;
+    ctx.setLineDash([]);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawAll(prog=animP){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  drawTiles();
+
+  ctx.fillStyle='rgba(0,0,0,0.05)';
+  ctx.fillRect(0,0,W,H);
+
+  // Collect all path edges to exclude from "normal" edge drawing
+  const allPathEdges=new Set();
+  paths.forEach(pathObj=>{
+    const p=pathObj.path;
+    for(let i=0;i<p.length-1;i++){
+      allPathEdges.add(`${p[i]}-${p[i+1]}`);
+      allPathEdges.add(`${p[i+1]}-${p[i]}`);
+    }
+  });
+
+  // ── Non-route edges — dark graph lines ──
+  EDGE_DEFS.forEach(([a,b])=>{
+    if(!NODES[a]||!NODES[b])return;
+    if(allPathEdges.has(`${a}-${b}`)||allPathEdges.has(`${b}-${a}`))return;
+    const pa=nxy(a),pb=nxy(b);
+    ctx.setLineDash([]);
+    // Dark casing
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=5;ctx.stroke();
+    // Mid-gray road line
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+    ctx.strokeStyle='rgba(80,90,110,0.8)';ctx.lineWidth=2;ctx.stroke();
+  });
+
+  // ── Draw non-primary paths first (underneath) ──
+  if(paths.length){
+    paths.forEach((pathObj,i)=>{
+      if(i===selectedPath) return; // draw primary last (on top)
+      drawPath(pathObj, pathObj.styleIdx, 1, false);
+    });
+    // ── Draw primary path on top (animated) ──
+    const primary=paths[selectedPath];
+    if(primary) drawPath(primary, primary.styleIdx, prog, true);
+
+    // Moving car dot on primary path
+    if(primary && prog>0&&prog<1){
+      const p=primary.path;
+      const total=p.length-1;
+      const idx=Math.min(total-1,Math.floor(prog*total));
+      const a=p[idx],b=p[idx+1]||p[idx];
+      if(NODES[a]&&NODES[b]){
+        const pa=nxy(a),pb=nxy(b);
+        const sf=(prog*total)-idx;
+        const dx=pa.x+(pb.x-pa.x)*sf,dy=pa.y+(pb.y-pa.y)*sf;
+        ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(dx+1,dy+1,12,0,Math.PI*2);
+        ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fill();
+        ctx.beginPath();ctx.arc(dx,dy,12,0,Math.PI*2);
+        ctx.fillStyle='#fff';ctx.fill();
+        ctx.strokeStyle=PATH_STYLES[primary.styleIdx].outlineColor;ctx.lineWidth=2;ctx.stroke();
+        ctx.beginPath();ctx.arc(dx,dy,7,0,Math.PI*2);
+        ctx.fillStyle=PATH_STYLES[primary.styleIdx].outlineColor;ctx.fill();
+        ctx.beginPath();ctx.arc(dx,dy,3,0,Math.PI*2);
+        ctx.fillStyle='#fff';ctx.fill();
+      }
+    }
+  }
+
+  // ── Nodes ──
+  const allPathNodes=new Set();
+  paths.forEach(pathObj=>pathObj.path.forEach(n=>allPathNodes.add(n)));
+
+  Object.entries(NODES).forEach(([id,n])=>{
+    const pos=nxy(id);
+    const nx=pos.x,ny=pos.y;
+    const isS=id===startN,isE=id===endN;
+    const inP=allPathNodes.has(id),isH=id===hovN;
+    const r=isS||isE?13:inP?10:isH?10:7;
+
+    if(isS||isE){
+      ctx.setLineDash([]);
+      ctx.beginPath();ctx.arc(nx,ny,r+6,0,Math.PI*2);
+      ctx.fillStyle=isS?'#22c55e18':'#ef444418';ctx.fill();
+      ctx.beginPath();ctx.arc(nx,ny,r+3,0,Math.PI*2);
+      ctx.fillStyle=isS?'#22c55e28':'#ef444428';ctx.fill();
+    }
+    ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(nx+1,ny+1,r+2,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fill();
+    ctx.beginPath();ctx.arc(nx,ny,r+2,0,Math.PI*2);
+    ctx.fillStyle='#1a1d2e';ctx.fill();
+    ctx.strokeStyle=isS?'#22c55e':isE?'#ef4444':inP?'#60a5fa':'#374151';
+    ctx.lineWidth=isS||isE?2.5:1.8;ctx.stroke();
+    ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);
+    ctx.fillStyle=isS?'#15803d':isE?'#b91c1c':inP?'#1e3a8a':isH?'#2a2d3a':'#111827';
+    ctx.fill();
+
+    const shortId=id.length>3?id.slice(0,3):id;
+    ctx.font=`700 ${r>9?10:8}px 'DM Sans',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=inP||isS||isE?'#e2e8f0':'#6b7280';
+    ctx.fillText(shortId,nx,ny);
+    ctx.textBaseline='alphabetic';
+
+    if(isS||isE||isH||(inP&&r>8)){
+      const nm=n.name;
+      ctx.font='500 10px "DM Sans",sans-serif';
+      ctx.textAlign='center';
+      const tw=ctx.measureText(nm).width+12;
+      const lx=nx, ly=ny-r-10;
+      ctx.fillStyle='rgba(15,17,23,0.92)';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(lx-tw/2,ly-13,tw,16,4);
+      else ctx.rect(lx-tw/2,ly-13,tw,16);
+      ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=0.8;ctx.stroke();
+      ctx.fillStyle='#e2e8f0';
+      ctx.fillText(nm,lx,ly);
+    }
+  });
+  ctx.setLineDash([]);
+}
+
+function animRoute(){
+  if(animRAF)cancelAnimationFrame(animRAF);
+  (function step(){
+    animP=Math.min(1,animP+0.013);
+    drawAll(animP);
+    if(animP<1)animRAF=requestAnimationFrame(step);
+  })();
+}
+
+// ─── INTERACTION ────────────────────────────────────────────────
+function nodeAt(px,py){
+  let best=null,bestD=20;
+  for(const[id] of Object.entries(NODES)){
+    const pos=nxy(id);
+    const d=Math.hypot(px-pos.x,py-pos.y);
+    if(d<bestD){bestD=d;best=id;}
+  }
+  return best;
+}
+
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();
+  const px=(e.clientX-r.left)*(canvas.width/r.width);
+  const py=(e.clientY-r.top)*(canvas.height/r.height);
+  const hit=nodeAt(px,py);
+  if(!hit)return;
+  // Reset live tracking if user picks a new node
+  if(liveTracking) stopTracking();
+  paths=[]; selectedPath=0;
+  document.getElementById('route-legend').style.display='none';
+  if(pickMode==='start'){
+    startN=hit;
+    document.getElementById('ls').textContent=NODES[hit].name;
+    document.getElementById('ls').className='lbl v';
+    pickMode='end';
+    document.getElementById('rs').classList.remove('pick');
+    document.getElementById('re').classList.add('pick');
+  } else {
+    endN=hit;
+    document.getElementById('le').textContent=NODES[hit].name;
+    document.getElementById('le').className='lbl v';
+    document.getElementById('re').classList.remove('pick');
+  }
+  const ok=startN&&endN&&startN!==endN;
+  document.getElementById('fbtn').disabled=!ok;
+  if(ok){animP=0;findRoute();}else drawAll();
+});
+
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const px=(e.clientX-r.left)*(canvas.width/r.width);
+  const py=(e.clientY-r.top)*(canvas.height/r.height);
+  const hit=nodeAt(px,py);
+  const tip=document.getElementById('tip');
+  if(hit!==hovN){hovN=hit;canvas.style.cursor=hit?'pointer':'default';drawAll();}
+  if(hit){
+    const k=Object.keys(traffic).find(k=>k.startsWith(hit+'-')||k.endsWith('-'+hit));
+    const cond=(traffic[k]||{}).condition||'clear';
+    const col=CCOL[cond];
+    const n=NODES[hit];
+    tip.style.display='block';
+    tip.style.left=(e.clientX-mainEl.getBoundingClientRect().left+16)+'px';
+    tip.style.top=(e.clientY-mainEl.getBoundingClientRect().top+16)+'px';
+    tip.innerHTML=`<strong style="font-size:13px">${n.name}</strong><br>
+      <span style="color:#94a3b8;font-size:10px;font-family:'JetBrains Mono',monospace">${n.lat.toFixed(4)}°N  ${n.lon.toFixed(4)}°E</span><br>
+      <span style="color:${col};font-size:12px;font-weight:600">● ${cond}</span>`;
+  } else tip.style.display='none';
+});
+canvas.addEventListener('mouseleave',()=>{hovN=null;document.getElementById('tip').style.display='none';drawAll();});
+
+function setMode(m){
+  tMode=m;
+  ['drive','walk','auto'].forEach(x=>document.getElementById(`mb-${x}`).classList.remove('on'));
+  document.getElementById(`mb-${m}`).classList.add('on');
+  if(route.length)findRoute(true);
+}
+function setPick(m){
+  pickMode=m;
+  document.getElementById('rs').classList.toggle('pick',m==='start');
+  document.getElementById('re').classList.toggle('pick',m==='end');
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+window.addEventListener('resize',resize);
+setTimeout(resize,60);
+setPick('start');
+poll();
+setInterval(poll,5000);
+</script>
+</body>
+</html>

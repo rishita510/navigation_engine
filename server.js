@@ -2,13 +2,16 @@
 // No CelesTrak, no satellite.js needed. All simulation runs in the browser.
 
 const express = require('express');
-const path    = require('path');
-const app     = express();
-const PORT    = 3001;
+const path = require('path');
 
+const app = express();
+const PORT = 3001;
+
+// Serve static files from public folder
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`\n  Satellite Routing Engine`);
-  console.log(`  Open → http://localhost:${PORT}\n`);
+  console.log("\nSatellite Routing Engine");
+  console.log(`Open → http://localhost:${PORT}\n`);
 });
