@@ -1,0 +1,12 @@
+{
+  "name": "satellite-routing-engine",
+  "version": "2.0.0",
+  "description": "Simulated satellite routing — Dijkstra + A* — no internet needed",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
