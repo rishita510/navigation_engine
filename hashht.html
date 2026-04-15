@@ -167,6 +167,46 @@ body{display:flex;flex-direction:column;background:#0f1117}
 #tip{position:absolute;background:rgba(15,17,23,0.97);border:1px solid #2a2d3a;border-radius:8px;padding:8px 12px;font-size:12px;pointer-events:none;display:none;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:1.65;max-width:180px;color:#e2e8f0}
 #algo{position:absolute;bottom:12px;right:12px;z-index:100;background:rgba(15,17,23,0.9);border:1px solid #2a2d3a;border-radius:7px;padding:4px 11px;font-size:10px;color:#374151;font-family:'JetBrains Mono',monospace}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2d3a;border-radius:4px}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input {
+  opacity: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  background-color: #ccc;
+  border-radius: 34px;
+  top: 0; left: 0; right: 0; bottom: 0;
+  transition: 0.4s;
+}
+
+.slider:before {
+  content: "";
+  position: absolute;
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.4s;
+}
+
+input:checked + .slider {
+  background-color: #4CAF50;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
 </style>
 </head>
 <body>
@@ -180,6 +220,10 @@ body{display:flex;flex-direction:column;background:#0f1117}
   <div id="srv-dot"></div>
   <span id="srv-lbl">Connecting…</span>
   <div class="t-right">
+    <label class="switch">
+  <input type="checkbox" id="toggleBtn">
+  <span class="slider"></span>
+</label>
     <span id="upd-flash">⟳ Traffic updated</span>
     <span id="poll-t">—</span>
   </div>
@@ -208,9 +252,9 @@ body{display:flex;flex-direction:column;background:#0f1117}
       </div>
       <button id="fbtn" disabled onclick="findRoute()">Find Fastest Route</button>
       <button id="sbtn" onclick="stopTracking()">⏹ Stop Live Tracking</button>
-      <div id="live-badge" class="live-badge" style="display:none"><span class="live-dot"></span>Live — recalc every 30s</div>
+      <div id="live-badge" class="live-badge" style="display:none"><span class="live-dot"></span>Live — recalc every 10s</div>
       <div id="countdown-bar">
-        <div id="countdown-lbl"><span>Next recalculation</span><span id="countdown-num">30s</span></div>
+        <div id="countdown-lbl"><span>Next recalculation</span><span id="countdown-num">10s</span></div>
         <div id="countdown-track"><div id="countdown-fill"></div></div>
       </div>
       <div class="route-legend" id="route-legend">
@@ -300,6 +344,27 @@ body{display:flex;flex-direction:column;background:#0f1117}
 // So  x = (lon - 77.45) / 0.30
 //     y = (13.10 - lat) / 0.25   (inverted: north=top)
 // ═══════════════════════════════════════════════════════════════════
+
+
+  const toggle = document.getElementById("toggleBtn");
+
+  // Load saved state
+  if (localStorage.getItem("toggleState") === "on") {
+    toggle.checked = true;
+  } else {
+    toggle.checked = false;
+  }
+
+  toggle.addEventListener("change", function () {
+    if (this.checked) {
+      localStorage.setItem("toggleState", "on");
+      window.location.href = "hashht.html";
+    } else {
+      localStorage.setItem("toggleState", "off");
+      window.location.href = "index.html";
+    }
+  });
+
 
 function lonToX(lon){ return (lon - 77.45) / 0.30; }
 function latToY(lat){ return (13.10 - lat) / 0.25; }
@@ -556,9 +621,13 @@ function buildGraph(penalizeEdges=null, edgeMultiplier=1){
     if(!NODES[a]||!NODES[b]) return;
     const k=`${a}-${b}`, kr=`${b}-${a}`;
     const td=traffic[k]||traffic[kr];
+
+    // ── BLOCKED roads are completely removed from the graph ──
+    // A blocked road cannot be traversed — treat as non-existent
+    if(td?.condition==='blocked') return;
+
     const base=td?.baseWeight||defaultWeight(a,b);
     let w=td?td.effectiveWeight:base;
-    // Apply penalty to force alternate routes
     if(penalizeEdges){
       const ek=`${a}-${b}`, ekr=`${b}-${a}`;
       if(penalizeEdges.has(ek)||penalizeEdges.has(ekr)) w=w*edgeMultiplier;
@@ -600,6 +669,50 @@ function dijkstra(src,dst){
   return dijkstraWithGraph(buildGraph(),src,dst);
 }
 
+// ─── INCREMENTAL PATH UPDATE ─────────────────────────────────────
+// Snapshot of edge weights at the time paths were last computed.
+// Used to detect which edges actually changed since last Dijkstra run.
+let cachedWeights = {}; // { 'edgeKey': effectiveWeight }
+let cachedNodes = { start: null, end: null }; // nodes for which paths were computed
+
+function snapshotWeights(){
+  const snap = {};
+  EDGE_DEFS.forEach(([a,b])=>{
+    const k=`${a}-${b}`, kr=`${b}-${a}`;
+    const td=traffic[k]||traffic[kr];
+    snap[k] = td ? td.effectiveWeight : defaultWeight(a,b);
+  });
+  return snap;
+}
+
+// Returns set of edge keys whose weight changed since last snapshot
+function getChangedEdges(){
+  const changed = new Set();
+  EDGE_DEFS.forEach(([a,b])=>{
+    const k=`${a}-${b}`, kr=`${b}-${a}`;
+    const td=traffic[k]||traffic[kr];
+    const nowW = td ? td.effectiveWeight : defaultWeight(a,b);
+    const nowBlocked = td?.condition==='blocked';
+    const wasBlocked = cachedWeights[k] === 99999;
+    if(nowW !== (cachedWeights[k]||0) || nowBlocked !== wasBlocked){
+      changed.add(k); changed.add(kr);
+    }
+  });
+  return changed;
+}
+
+// Check if any changed edge lies on any of the current 3 paths
+function changedEdgesTouchPaths(changedEdges){
+  for(const pathObj of paths){
+    const p = pathObj.path;
+    for(let i=0;i<p.length-1;i++){
+      const k=`${p[i]}-${p[i+1]}`, kr=`${p[i+1]}-${p[i]}`;
+      if(changedEdges.has(k)||changedEdges.has(kr)) return true;
+    }
+  }
+  return false;
+}
+
 // Compute score for a path: sum of condition severity on each edge
 function pathConditionScore(p){
   const severity={clear:0,light:1,moderate:2,heavy:3,construction:4,accident:5,blocked:10};
@@ -615,23 +728,18 @@ function pathConditionScore(p){
 
 // Find 3 distinct paths: cleanest, traffic-heavy, longest alternate
 function findThreePaths(src, dst){
-  // Path 1: Standard Dijkstra (fastest/cleanest based on effective weights)
   const r1=dijkstra(src,dst);
   if(!r1.path.length) return [];
 
-  // Build edge set of path 1
   const edgeSet1=new Set();
   for(let i=0;i<r1.path.length-1;i++){
     edgeSet1.add(`${r1.path[i]}-${r1.path[i+1]}`);
     edgeSet1.add(`${r1.path[i+1]}-${r1.path[i]}`);
   }
 
-  // Path 2: Force traffic by using base weights only (ignore traffic penalties = finds physically alternate road)
-  // Then penalize path1 edges heavily to diverge
   const g2=buildGraph(edgeSet1, 8);
   const r2=dijkstraWithGraph(g2,src,dst);
 
-  // Build edge set of path 1+2
   const edgeSet12=new Set([...edgeSet1]);
   if(r2.path.length){
     for(let i=0;i<r2.path.length-1;i++){
@@ -640,13 +748,9 @@ function findThreePaths(src, dst){
     }
   }
 
-  // Path 3: Penalize edges from both path1 and path2 to force a third diverging path
   const g3=buildGraph(edgeSet12, 15);
   const r3=dijkstraWithGraph(g3,src,dst);
 
-  const results=[];
-
-  // Sort by condition score to assign labels correctly
   const candidates=[
     {path:r1.path,dist:r1.dist},
     r2.path.length?{path:r2.path,dist:r2.dist}:null,
@@ -655,18 +759,14 @@ function findThreePaths(src, dst){
 
   if(!candidates.length) return [];
 
-  // Score each candidate by traffic severity
   candidates.forEach(c=>{ c.score=pathConditionScore(c.path); c.baseDist=c.path.length; });
 
-  // Cleanest = lowest condition score
   candidates.sort((a,b)=>a.score-b.score);
   const clean=candidates[0];
 
-  // Longest = most hops (or highest base km)
   candidates.sort((a,b)=>b.baseDist-a.baseDist);
   const longest=candidates[0];
 
-  // Traffic = highest condition score among remaining
   candidates.sort((a,b)=>b.score-a.score);
   const trafficPath=candidates.find(c=>c!==clean)||candidates[0];
 
@@ -698,12 +798,11 @@ async function poll(){
     if(route.length>1) checkAffected(nd);
     traffic=nd;
     renderEvents(ed.events||[]);
-    // Render server blockchain into UI
     renderServerChain(bd);
     document.getElementById('poll-t').textContent=new Date().toLocaleTimeString();
     flashEl('upd-flash');
-    if(changed && liveTracking && startN && endN) findRoute(true);
-    else drawAll();
+    // Do NOT recalculate route on every poll — only the 30s countdown triggers recalculation
+    drawAll();
   }catch{
     setStatus(false);
     simulateLocal();
@@ -712,30 +811,56 @@ async function poll(){
 }
 
 function renderServerChain(bd){
-  if(!bd||!bd.chain) return;
+  if(!bd) return;
   const dot=document.getElementById('chain-dot');
   const val=document.getElementById('chain-validity');
-  if(!dot)return;
-  dot.className='chain-valid-dot'+(bd.isValid?'':' bad');
-  val.textContent=bd.isValid?'VALID':'TAMPERED';
-  val.style.color=bd.isValid?'#22c55e':'#ef4444';
-  document.getElementById('chain-len').textContent=bd.totalBlocks;
-  document.getElementById('chain-pending').textContent=bd.pendingTransactions;
+  if(!dot) return;
+
+  const isValid = bd.isValid ?? true;
+  dot.className='chain-valid-dot'+(isValid?'':' bad');
+  val.textContent=isValid?'VALID':'TAMPERED';
+  val.style.color=isValid?'#22c55e':'#ef4444';
+  document.getElementById('chain-len').textContent=bd.totalBlocks||bd.chain?.length||'—';
+  document.getElementById('chain-pending').textContent=bd.pendingTransactions??'0';
+
   const list=document.getElementById('chain-list');
-  list.innerHTML='';
-  bd.chain.forEach(blk=>{
-    const d=document.createElement('div');
-    d.className='blk';
-    const txSummary=blk.transactions.slice(0,2).map(tx=>
-      typeof tx==='string'?tx:`${tx.road||tx.edge}: ${tx.from}→${tx.to}`
-    ).join('; ')+(blk.transactions.length>2?` +${blk.transactions.length-2} more`:'');
-    d.innerHTML=`
-      <div class="blk-idx">#${blk.index} <span style="color:#374151;font-weight:400;font-size:9px">${new Date(blk.timestamp).toLocaleTimeString()}</span></div>
-      <div class="blk-hash">${blk.hash.slice(0,30)}…</div>
-      <div class="blk-txs">${txSummary}</div>
-      <div class="blk-valid ok">✓</div>`;
-    list.appendChild(d);
-  });
+
+  // Full chain array (from /api/blockchain)
+  if(bd.chain && bd.chain.length){
+    list.innerHTML='';
+    bd.chain.forEach(blk=>{
+      list.appendChild(makeBlockEl(blk));
+    });
+    return;
+  }
+
+  // Compact: just latestBlock from /api/traffic/diff
+  if(bd.latestBlock){
+    // Prepend latest block if not already shown
+    const existing=list.querySelector('.blk');
+    const existingIdx = existing ? parseInt(existing.querySelector('.blk-idx')?.textContent) || -1 : -1;
+    if(bd.latestBlock.index !== existingIdx){
+      const el=makeBlockEl(bd.latestBlock);
+      el.style.borderColor='#3b82f6'; // highlight newest block
+      list.insertBefore(el, list.firstChild);
+      // Keep max 8 blocks displayed
+      while(list.children.length>8) list.removeChild(list.lastChild);
+    }
+  }
+}
+
+function makeBlockEl(blk){
+  const d=document.createElement('div');
+  d.className='blk';
+  const txSummary=blk.transactions.slice(0,2).map(tx=>
+    typeof tx==='string'?tx:`${tx.road||tx.edge}: ${tx.from}→${tx.to}`
+  ).join('; ')+(blk.transactions.length>2?` +${blk.transactions.length-2} more`:'');
+  d.innerHTML=`
+    <div class="blk-idx">#${blk.index} <span style="color:#374151;font-weight:400;font-size:9px">${new Date(blk.timestamp).toLocaleTimeString()}</span></div>
+    <div class="blk-hash">${blk.hash.slice(0,30)}…</div>
+    <div class="blk-txs">${txSummary}</div>
+    <div class="blk-valid ok">✓</div>`;
+  return d;
 }
 
 const SIM_CONDS=['clear','clear','clear','clear','light','light','moderate','heavy','construction','accident','blocked'];
@@ -766,8 +891,7 @@ function simulateLocal(){
     }
   }
   if(route.length>1) checkAffected(traffic);
-  // If tracking and traffic changed, recalculate routes silently
-  if(changed && liveTracking && startN && endN) findRoute(true);
+  // Do NOT recalculate route here — only the 30s countdown triggers recalculation
   const list=document.getElementById('ev-list');
   list.innerHTML='';
   simEvents.slice(0,10).forEach(e=>{
@@ -967,69 +1091,144 @@ function updateStepsPanel(pathObj){
   });
 }
 
+const RECALC_INTERVAL = 10; // seconds between automatic path recalculations
+
 function startCountdown(){
-  if(countdownT) clearInterval(countdownT);
-  countdownSec=30;
+  if(countdownT) return; // never reset mid-run
+
+  countdownSec = RECALC_INTERVAL;
   document.getElementById('countdown-bar').style.display='block';
   document.getElementById('countdown-fill').style.width='100%';
-  document.getElementById('countdown-num').textContent='30s';
+  document.getElementById('countdown-num').textContent=`${RECALC_INTERVAL}s`;
 
-  countdownT=setInterval(()=>{
+  countdownT=setInterval(async()=>{
     countdownSec--;
-    const pct=Math.max(0,(countdownSec/30)*100);
+    const pct=Math.max(0,(countdownSec/RECALC_INTERVAL)*100);
     document.getElementById('countdown-fill').style.width=pct+'%';
     document.getElementById('countdown-num').textContent=countdownSec+'s';
+
     if(countdownSec<=0){
-      if(liveTracking) findRoute(true);
-      countdownSec=30; // reset
+      clearInterval(countdownT);
+      countdownT=null;
+      if(liveTracking && startN && endN){
+        // Auto-recalc: incremental update, NO animation replay
+        await incrementalUpdate(true);
+        startCountdown(); // restart timer after update completes
+      }
     }
   },1000);
+}
+
+// ── INCREMENTAL UPDATE ────────────────────────────────────────────
+// animate=true  → replay path animation (used on manual Recalculate)
+// animate=false → silent redraw only    (used on auto timer recalc)
+async function incrementalUpdate(animate=false){
+  try {
+    const currentPathArrays = paths.map(p => p.path);
+    const res = await fetch(`${API}/api/traffic/diff`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ src:startN, dst:endN, currentPaths:currentPathArrays })
+    });
+    if(!res.ok) throw new Error('diff failed');
+    const data = await res.json();
+
+    // Update blockchain display from diff response (no extra fetch needed)
+    if(data.blockchain) renderServerChain(data.blockchain);
+
+    if(!data.needsRecompute){
+      // Paths unchanged — update colors only, then animate
+      updateStepsPanel(paths[selectedPath]||paths[0]);
+      if(animate){ animP=0; animRoute(); } else drawAll();
+      return;
+    }
+
+    // Server recomputed paths — apply them
+    const serverPaths = data.paths;
+    if(!serverPaths || !serverPaths.length){
+      alert('No path found — all routes may be blocked');
+      return;
+    }
+    const newPaths = serverPaths.map((p,i) => ({...p, styleIdx:i}));
+    cachedWeights = snapshotWeights();
+    cachedNodes   = { start:startN, end:endN };
+    paths = newPaths;
+    route = paths[selectedPath]?.path || paths[0].path;
+    updateLegendAndPanel();
+    // Always animate when called
+    animP=0; animRoute();
+
+  } catch(e) {
+    // Server offline — local incremental + animate
+    findRoute(true);
+    if(animate){ animP=0; animRoute(); }
+  }
+}
+
+function updateLegendAndPanel(){
+  paths.forEach((p,i)=>{
+    const style=PATH_STYLES[p.styleIdx];
+    const t=Math.round(p.dist*SPEED[tMode]);
+    const tStr=t>60?`${Math.floor(t/60)}h${t%60}m`:t+'min';
+    document.getElementById(`leg-${i}-detail`).textContent=
+      `${p.path.length-1} stops · ~${tStr}`;
+    document.querySelector(`#leg-${i} .rl-line`).style.background=style.outlineColor;
+    document.querySelector(`#leg-${i} .rl-name`).textContent=
+      ['🟢 Cleanest Path','🟠 Traffic Path','⚫ Longest Path'][i];
+  });
+  document.getElementById('route-legend').style.display='block';
+  updateStepsPanel(paths[selectedPath]||paths[0]);
 }
 
 function findRoute(silent=false){
   if(!startN||!endN||startN===endN)return;
 
-  const threePaths=findThreePaths(startN,endN);
-  if(!threePaths.length){alert('No path found between these nodes');return;}
+  const isNewNodes    =(startN!==cachedNodes.start||endN!==cachedNodes.end);
+  const hasCachedPaths=paths.length>0;
+  let newPaths;
 
-  paths=threePaths;
-  route=paths[selectedPath]?.path||paths[0].path; // backward compat for checkAffected
+  if(!isNewNodes && hasCachedPaths){
+    const changedEdges=getChangedEdges();
+    if(changedEdges.size===0){ updateStepsPanel(paths[selectedPath]||paths[0]); drawAll(); return; }
+    if(!changedEdgesTouchPaths(changedEdges)){ updateStepsPanel(paths[selectedPath]||paths[0]); drawAll(); return; }
+    newPaths=findThreePaths(startN,endN);
+  } else {
+    newPaths=findThreePaths(startN,endN);
+  }
 
-  // Update legend details
-  paths.forEach((p,i)=>{
-    const style=PATH_STYLES[p.styleIdx];
-    const baseDist=p.path.reduce((acc,n,j)=>{
-      if(j===p.path.length-1)return acc;
-      const nx=p.path[j+1];
-      const k=`${n}-${nx}`,kr=`${nx}-${n}`;
-      return acc+(traffic[k]||traffic[kr])?.baseWeight||defaultWeight(n,nx);
-    },0);
-    const t=Math.round(p.dist*SPEED[tMode]);
-    const tStr=t>60?`${Math.floor(t/60)}h${t%60}m`:t+'min';
-    document.getElementById(`leg-${i}-detail`).textContent=
-      `${p.path.length-1} stops · ~${tStr}`;
-    // Update line color in legend
-    document.querySelector(`#leg-${i} .rl-line`).style.background=style.outlineColor;
-    document.querySelector(`#leg-${i} .rl-name`).textContent=
-      ['🟢 Cleanest Path','🟠 Traffic Path','⚫ Longest Path'][i];
-  });
+  if(!newPaths||!newPaths.length){ alert('No path found — all routes may be blocked'); return; }
 
-  document.getElementById('route-legend').style.display='block';
-  updateStepsPanel(paths[selectedPath]||paths[0]);
+  cachedWeights=snapshotWeights();
+  cachedNodes={start:startN,end:endN};
+  paths=newPaths;
+  route=paths[selectedPath]?.path||paths[0].path;
+  updateLegendAndPanel();
 
-  // Start live tracking
   if(!liveTracking){
     liveTracking=true;
     document.getElementById('sbtn').style.display='block';
     document.getElementById('live-badge').style.display='flex';
-    document.getElementById('fbtn').textContent='Recalculate Now';
-    startCountdown();
-  } else {
-    // Reset countdown after manual/auto recalc
+    const fbtn=document.getElementById('fbtn');
+    fbtn.textContent='Recalculate Now';
+    // Manual recalculate: force immediate update with animation, then reset timer
+    fbtn.onclick=async()=>{
+      clearInterval(countdownT); countdownT=null;
+      await incrementalUpdate(true); // animate=true on manual press
+      startCountdown();
+    };
     startCountdown();
   }
 
-  if(!silent){animP=0;animRoute();}else drawAll();
+  // silent=true  → auto timer recalc, no animation
+  // silent=false → new nodes or manual button, play animation + reset timer
+  if(!silent){
+    // Reset timer so user gets a fresh 10s window after manual recalc
+    clearInterval(countdownT); countdownT=null;
+    startCountdown();
+    animP=0; animRoute();
+  } else {
+    drawAll();
+  }
 }
 
 function stopTracking(){
@@ -1039,7 +1238,9 @@ function stopTracking(){
   document.getElementById('sbtn').style.display='none';
   document.getElementById('live-badge').style.display='none';
   document.getElementById('countdown-bar').style.display='none';
-  document.getElementById('fbtn').textContent='Find Fastest Route';
+  const fbtn=document.getElementById('fbtn');
+  fbtn.textContent='Find Fastest Route';
+  fbtn.onclick=()=>findRoute();
   drawAll();
 }
 
@@ -1254,9 +1455,9 @@ canvas.addEventListener('click',e=>{
   const py=(e.clientY-r.top)*(canvas.height/r.height);
   const hit=nodeAt(px,py);
   if(!hit)return;
-  // Reset live tracking if user picks a new node
+  // Reset live tracking and path cache when user picks new nodes
   if(liveTracking) stopTracking();
-  paths=[]; selectedPath=0;
+  paths=[]; selectedPath=0; cachedWeights={}; cachedNodes={start:null,end:null};
   document.getElementById('route-legend').style.display='none';
   if(pickMode==='start'){
     startN=hit;
